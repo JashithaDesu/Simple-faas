@@ -1,0 +1,63 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: functions.faas.jashitha.dev
+spec:
+  group: faas.jashitha.dev
+  names:
+    kind: Function
+    listKind: FunctionList
+    plural: functions
+    singular: function
+    shortNames: ["fn"]
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Replicas
+          type: integer
+          jsonPath: .status.replicas
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: ["image", "port"]
+              properties:
+                image:
+                  type: string
+                command:
+                  type: array
+                  items:
+                    type: string
+                port:
+                  type: integer
+                idleTimeoutSeconds:
+                  type: integer
+                  default: 300
+                minReplicas:
+                  type: integer
+                  default: 0
+                maxReplicas:
+                  type: integer
+                  default: 3
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                replicas:
+                  type: integer
+                lastRequestTime:
+                  type: string
+                  format: date-time
+                observedGeneration:
+                  type: integer

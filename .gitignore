@@ -1,0 +1,5 @@
+mini-faas-skeleton.zip
+mini-faas-hello-function.zip
+mini-faas-gateway-deploy.zip
+*.zip
+bin/
