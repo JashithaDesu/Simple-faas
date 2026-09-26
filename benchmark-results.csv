@@ -1,0 +1,11 @@
+type,iteration,latency_seconds
+cold,1,2.704782
+cold,2,2.664310
+cold,3,2.650825
+cold,4,2.670983
+cold,5,2.656851
+warm,1,0.037843
+warm,2,0.044131
+warm,3,0.039399
+warm,4,0.036592
+warm,5,0.037983

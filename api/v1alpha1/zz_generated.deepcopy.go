@@ -17,6 +17,10 @@ func (in *Function) DeepCopyInto(out *Function) {
 	if in.Spec.Command != nil {
 		out.Spec.Command = append([]string{}, in.Spec.Command...)
 	}
+if in.Spec.TriggeredReplicas != nil {
+		tr := *in.Spec.TriggeredReplicas
+		out.Spec.TriggeredReplicas = &tr
+	}
 	in.Status.DeepCopyInto(&out.Status)
 }
 

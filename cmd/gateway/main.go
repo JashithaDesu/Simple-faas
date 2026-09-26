@@ -13,6 +13,9 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -22,6 +25,17 @@ import (
 )
 
 var k8sClient client.Client
+var (
+	coldStartTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "faas_cold_starts_total",
+		Help: "Total number of cold-start invocations triggered by the gateway.",
+	})
+	coldStartDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "faas_cold_start_duration_seconds",
+		Help:    "Time from cold-start trigger to the function becoming warm.",
+		Buckets: prometheus.DefBuckets,
+	})
+)
 
 func main() {
 	cfg := ctrl.GetConfigOrDie()
@@ -33,6 +47,7 @@ func main() {
 	k8sClient = c
 
 	http.HandleFunc("/invoke/", handleInvoke)
+	http.Handle("/metrics", promhttp.Handler())
 	log.Println("gateway listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
@@ -62,6 +77,8 @@ func handleInvoke(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if fn.Status.Phase != faasv1alpha1.PhaseWarm {
+		coldStartTotal.Inc()
+		coldStartBegin := time.Now()
 		// COLD PATH: not warm yet. Bump min replicas so the controller's
 		// next reconcile scales it up, then poll until it's ready.
 		if err := triggerColdStart(ctx, &fn); err != nil {
@@ -72,20 +89,16 @@ func handleInvoke(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "function did not become ready in time", http.StatusGatewayTimeout)
 			return
 		}
+		coldStartDuration.Observe(time.Since(coldStartBegin).Seconds())
 	}
-
 	forwardToFunction(w, r, fnName)
 }
 
-// triggerColdStart nudges the Function's spec so the controller's next
-// reconcile loop scales the backing Deployment up from zero.
 func triggerColdStart(ctx context.Context, fn *faasv1alpha1.Function) error {
-	if fn.Spec.MinReplicas < 1 {
-		patch := client.MergeFrom(fn.DeepCopy())
-		fn.Spec.MinReplicas = 1 // temporary nudge; controller can lower it again after idle
-		return k8sClient.Patch(ctx, fn, patch)
-	}
-	return nil
+	one := int32(1)
+	patch := client.MergeFrom(fn.DeepCopy())
+	fn.Spec.TriggeredReplicas = &one
+	return k8sClient.Patch(ctx, fn, patch)
 }
 
 // waitUntilWarm polls the Function's status until the controller reports

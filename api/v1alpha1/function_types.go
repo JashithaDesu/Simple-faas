@@ -29,6 +29,8 @@ type FunctionSpec struct {
 	// MaxReplicas caps how far the controller will scale up.
 	// +kubebuilder:default=3
 	MaxReplicas int32 `json:"maxReplicas,omitempty"`
+TriggeredReplicas *int32 `json:"triggeredReplicas,omitempty"`
+
 }
 
 // FunctionPhase describes the current lifecycle phase of a Function.

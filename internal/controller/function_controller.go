@@ -59,20 +59,23 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if desiredReplicas < fn.Spec.MinReplicas {
 		desiredReplicas = fn.Spec.MinReplicas
 	}
+
+	if fn.Spec.TriggeredReplicas != nil && *fn.Spec.TriggeredReplicas > desiredReplicas {
+		desiredReplicas = *fn.Spec.TriggeredReplicas
+	}
+
+	clearTrigger := false
 	if fn.Status.LastRequestTime != nil {
 		idleSince := time.Since(fn.Status.LastRequestTime.Time)
-		if idleSince >= idleTimeout && desiredReplicas > fn.Spec.MinReplicas {
-			// Idle too long: scale down. This is the scale-to-zero path.
-			logger.Info("scaling function to floor after idle timeout",
-				"function", fn.Name, "idleSince", idleSince)
-			desiredReplicas = fn.Spec.MinReplicas
-		} else if idleSince < idleTimeout && desiredReplicas < 1 {
-			// A request came in recently but we're at zero — this is
-			// the cold-start path. In this project the gateway is what
-			// actually triggers the scale-up by patching the Function
-			// spec/status before forwarding the request; the controller
-			// just reacts to that signal here.
-			desiredReplicas = 1
+		if idleSince >= idleTimeout {
+			if desiredReplicas > fn.Spec.MinReplicas {
+				logger.Info("scaling function to floor after idle timeout",
+					"function", fn.Name, "idleSince", idleSince)
+				desiredReplicas = fn.Spec.MinReplicas
+			}
+			if fn.Spec.TriggeredReplicas != nil {
+				clearTrigger = true
+			}
 		}
 	}
 
@@ -92,6 +95,13 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	if needsUpdate {
 		if err := r.Update(ctx, dep); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+	if clearTrigger {
+		patch := client.MergeFrom(fn.DeepCopy())
+		fn.Spec.TriggeredReplicas = nil
+		if err := r.Patch(ctx, &fn, patch); err != nil {
 			return ctrl.Result{}, err
 		}
 	}

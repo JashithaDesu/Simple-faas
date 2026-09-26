@@ -49,6 +49,9 @@ spec:
                 maxReplicas:
                   type: integer
                   default: 3
+                triggeredReplicas:
+                  type: integer
+
             status:
               type: object
               properties:
