@@ -11,6 +11,9 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -48,8 +51,31 @@ func main() {
 
 	http.HandleFunc("/invoke/", handleInvoke)
 	http.Handle("/metrics", promhttp.Handler())
-	log.Println("gateway listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+
+	srv := &http.Server{Addr: ":8080"}
+
+	go func() {
+		log.Println("gateway listening on :8080")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	// Wait for SIGTERM (what Kubernetes sends before force-killing the
+	// pod) and give in-flight requests a chance to finish instead of
+	// dropping them instantly.
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
+	<-stop
+	log.Println("shutdown signal received, draining in-flight requests...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
+	} else {
+		log.Println("shutdown complete, all in-flight requests finished")
+	}
 }
 
 func handleInvoke(w http.ResponseWriter, r *http.Request) {

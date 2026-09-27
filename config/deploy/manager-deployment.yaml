@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mini-faas-manager
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mini-faas-manager
+  template:
+    metadata:
+      labels:
+        app: mini-faas-manager
+    spec:
+      serviceAccountName: manager-sa
+      containers:
+        - name: manager
+          image: mini-faas-manager:local
+          imagePullPolicy: IfNotPresent
