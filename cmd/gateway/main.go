@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -115,6 +116,10 @@ func handleInvoke(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "function did not become ready in time", http.StatusGatewayTimeout)
 			return
 		}
+		if err := waitForEndpoint(fmt.Sprintf("%s.default.svc.cluster.local:8080", fnName), 5*time.Second); err != nil {
+			http.Error(w, "function pod ready but its service refused connections: "+err.Error(), http.StatusBadGateway)
+			return
+		}
 		coldStartDuration.Observe(time.Since(coldStartBegin).Seconds())
 	}
 	forwardToFunction(w, r, fnName)
@@ -149,4 +154,20 @@ func forwardToFunction(w http.ResponseWriter, r *http.Request, fnName string) {
 	target, _ := url.Parse(fmt.Sprintf("http://%s.default.svc.cluster.local:8080", fnName))
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.ServeHTTP(w, r)
+}
+
+// waitForEndpoint blocks until the function's Service accepts TCP
+// connections. A pod can report Ready before the Service's forwarding
+// rules for it are programmed, which surfaces as "connection refused".
+func waitForEndpoint(addr string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 500*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return nil
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	return fmt.Errorf("%s not accepting connections after %s", addr, timeout)
 }

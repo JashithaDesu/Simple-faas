@@ -1,0 +1,11 @@
+apiVersion: faas.jashitha.dev/v1alpha1
+kind: Function
+metadata:
+  name: hello-function
+  namespace: default
+spec:
+  idleTimeoutSeconds: 60
+  image: jashitha/hello-function:latest
+  maxReplicas: 3
+  minReplicas: 0
+  port: 8080
