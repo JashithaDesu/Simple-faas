@@ -114,10 +114,8 @@ Chaos test is manual: trigger a delayed invocation, then `kubectl delete pod` th
 
 - Only one 5-run benchmark session exists — no statistically robust multi-session suite, no load testing under concurrent requests
 - Prometheus is scraping and metrics are real, but there's no Grafana dashboard — numbers are read via raw PromQL, not visualized
-- AWS deployment is manual (SSH + `kubectl apply`), not CI/CD-automated — no GitHub Actions pipeline for this project
 - No multi-node testing — both local (`kind`) and AWS (`k3s`) runs are single-node
 - No tested behavior under `MaxReplicas` saturation / backpressure
-- AWS billing: free-tier assumptions haven't been reconfirmed against an actual billing-console check or budget alert
 
 ## Layout
 
